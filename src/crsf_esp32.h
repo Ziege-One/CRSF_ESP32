@@ -5,23 +5,10 @@
 #include "crsf_esp32_protocol.h"
 
 #define CRSF_MAX_CHANNELS 16
-#define CRSF_PACKET_SIZE 26
+#define CRSF_PACKET_SIZE 64
 
-#define BAUD_RATE 410000
+#define BAUD_RATE 420000
 #define CHANNEL_MASK 0x07FF
-
-
-
-//extern HardwareSerial* serial_data;
-//extern uint8_t crfs_buffer[CRSF_PACKET_SIZE];
-//extern uint16_t channels[CRSF_MAX_CHANNELS];
-//extern bool deviceInfoReplyPending;
-//extern bool deviceEntryReplyPending;
-//extern bool deviceReadReplyPending;
-//extern bool deviceWriteReplyPending;
-//extern bool deviceCommandReplyPending;
-//extern unsigned char crc8tab[256];
-
 
 class CRSF
 {
@@ -68,8 +55,6 @@ public:
     void setDeviceCommandReplyPending(int newValue);
 
     void set_crsf_channel(uint8_t ch, uint16_t value);
-
-    //uint8_t crc8(const uint8_t * ptr, uint8_t len);
 
 private:
     void updateChannels();
