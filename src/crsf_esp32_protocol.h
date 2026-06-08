@@ -12,6 +12,10 @@
 #define CRSF_FRAMETYPE_RPM 0x0C
 #define CRSF_FRAMETYPE_TEMP 0x0D
 #define CRSF_FRAMETYPE_VOLTAGES 0x0E
+#define CRSF_FRAMETYPE_VTX_TELEMETRY 0x10
+#define CRSF_FRAMETYPE_BAROMETER 0x11
+#define CRSF_FRAMETYPE_MAGNETOMETER 0x12
+#define CRSF_FRAMETYPE_ACCEL_GYRO 0x13
 #define CRSF_FRAMETYPE_LINK_STATISTICS 0x14             // Signal information. Uplink/Downlink RSSI, SNR, Link Quality (LQ), RF mode, transmit power
 #define CRSF_FRAMETYPE_RC_CHANNELS_PACKED 0x16          // Channels data (both handset to TX and RX to flight controller)
 #define CRSF_FRAMETYPE_SUBSET_RC_CHANNELS_PACKED 0x17   // (CRSFv3) Channels subset data

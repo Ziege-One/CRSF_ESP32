@@ -9,7 +9,8 @@ DeviceInfo info;
 
 #define DEBUG_CRSF false
 #define DEBUG_CRSF_TYPE false
-#define DEBUG_CRSF_SEND true
+#define DEBUG_CRSF_SEND false
+#define DEBUG_CRSF_TELE false
 
 CRSF::CRSF() {                  // Initialisierung
     deviceInfoReplyPending = 0; 
@@ -69,6 +70,43 @@ uint8_t crc8_ba(const uint8_t* ptr, size_t len, uint8_t init = 0x00) {
         crc = crc8_ba_tab[crc ^ ptr[i]];
     }
     return crc;
+}
+
+const int   Kl = 100;       // linearity constant
+const float Kr = 0.026;     // range constant
+
+int8_t sign(int32_t v) {
+    if (v > 0) return 1;
+    if (v < 0) return -1;
+    return 0;
+}
+
+int8_t get_vertical_speed_packed(int16_t vertical_speed_cm_s) {
+    if (vertical_speed_cm_s == 0)
+        return 0;
+
+    float x = log(abs(vertical_speed_cm_s) / (float)Kl + 1) / Kr;
+    int8_t packed = (int8_t)x;
+
+    return packed * sign(vertical_speed_cm_s);
+}
+
+uint16_t get_altitude_packed (int32_t altitude_dm){
+    enum
+    {
+        ALT_MIN_DM = 10000,                     //minimum altitude in dm
+        ALT_THRESHOLD_DM = 0x8000 - ALT_MIN_DM, //altitude of precision
+                                                // changing in dm
+        ALT_MAX_DM = 0x7ffe * 10 - 5,           //maximum altitude in dm
+    };
+
+    if(altitude_dm < -ALT_MIN_DM)               //less than minimum altitude
+        return 0;                               //minimum
+    if(altitude_dm > ALT_MAX_DM)                //more than maximum
+        return 0xfffe;                          //maximum
+    if(altitude_dm < ALT_THRESHOLD_DM)          //dm-resolution range
+        return altitude_dm + ALT_MIN_DM;
+    return ((altitude_dm + 5) / 10) | 0x8000;   //meter-resolution range
 }
 
 // Extract channels from CRSF buffer
@@ -495,32 +533,32 @@ void CRSF::send_param_response_CRSF_FLOAT(uint8_t param_id, uint8_t parent, cons
 
     strcpy((char*)&packet[9], name); // Name
 
-    packet[9 + len_name] = (val & 0xFF);            // Value 1
-    packet[10 + len_name] = ((val >> 8) & 0xFF);    // Value 2
-    packet[11 + len_name] = ((val >> 16) & 0xFF);   // Value 3
-    packet[12 + len_name] = ((val >> 24) & 0xFF);   // Value 4
+    packet[9  + len_name] = ((val >> 24) & 0xFF);   // Value 4
+	packet[10 + len_name] = ((val >> 16) & 0xFF);   // Value 3
+	packet[11 + len_name] = ((val >> 8) & 0xFF);    // Value 2
+    packet[12 + len_name] = (val & 0xFF);           // Value 1
 
-    packet[13 + len_name] = (min & 0xFF);           // min Value 1
-    packet[14 + len_name] = ((min >> 8) & 0xFF);    // min Value 2
+    packet[13 + len_name] = ((min >> 24) & 0xFF);   // min Value 4
     packet[14 + len_name] = ((min >> 16) & 0xFF);   // min Value 3
-    packet[16 + len_name] = ((min >> 24) & 0xFF);   // min Value 4
+    packet[15 + len_name] = ((min >> 8) & 0xFF);    // min Value 2	
+    packet[16 + len_name] = (min & 0xFF);           // min Value 1
 
-    packet[17 + len_name] = (max & 0xFF);           // max Value 1
-    packet[18 + len_name] = ((max >> 8) & 0xFF);    // max Value 2
-    packet[19 + len_name] = ((max >> 16) & 0xFF);   // max Value 3
-    packet[20 + len_name] = ((max >> 24) & 0xFF);   // max Value 4
+    packet[17 + len_name] = ((max >> 24) & 0xFF);   // max Value 4
+    packet[18 + len_name] = ((max >> 16) & 0xFF);   // max Value 3
+    packet[19 + len_name] = ((max >> 8) & 0xFF);    // max Value 2	
+    packet[20 + len_name] = (max & 0xFF);           // max Value 1
 
-    packet[21 + len_name] = (default_val & 0xFF);           // default Value 1
-    packet[22 + len_name] = ((default_val >> 8) & 0xFF);    // default Value 2
-    packet[23 + len_name] = ((default_val >> 16) & 0xFF);   // default Value 3
-    packet[24 + len_name] = ((default_val >> 24) & 0xFF);   // default Value 4    
+    packet[21 + len_name] = ((default_val >> 24) & 0xFF);   // default Value 4
+    packet[22 + len_name] = ((default_val >> 16) & 0xFF);   // default Value 3
+    packet[23 + len_name] = ((default_val >> 8) & 0xFF);    // default Value 2 	
+    packet[24 + len_name] = (default_val & 0xFF);           // default Value 1  
 
     packet[25 + len_name] = decimal_point;   // Decimal_point
 
-    packet[26 + len_name] = (step_size & 0xFF);           // Step Size Value 1
-    packet[27 + len_name] = ((step_size >> 8) & 0xFF);    // Step Size Value 2
-    packet[28 + len_name] = ((step_size >> 16) & 0xFF);   // Step Size Value 3
-    packet[29 + len_name] = ((step_size >> 24) & 0xFF);   // Step Size Value 4  
+    packet[26 + len_name] = ((step_size >> 24) & 0xFF);   // Step Size Value 4 
+	packet[27 + len_name] = ((step_size >> 16) & 0xFF);   // Step Size Value 3
+	packet[28 + len_name] = ((step_size >> 8) & 0xFF);    // Step Size Value 2
+    packet[29 + len_name] = (step_size & 0xFF);           // Step Size Value 1
 
     strcpy((char*)&packet[30 + len_name], unit); // Name
     
@@ -537,7 +575,7 @@ void CRSF::send_param_response_CRSF_FLOAT(uint8_t param_id, uint8_t parent, cons
     Serial.println(val);
 #endif    
 }
-
+/*
 void CRSF::send_param_response_CRSF_TEXT_SELECTION(uint8_t param_id, uint8_t parent, const char* name, const char* options, uint8_t val, uint8_t min, uint8_t max) {
 
     deviceReadReplyPending = false;
@@ -580,6 +618,95 @@ void CRSF::send_param_response_CRSF_TEXT_SELECTION(uint8_t param_id, uint8_t par
     Serial.println(val);
 #endif    
 }
+*/
+void CRSF::send_param_response_CRSF_TEXT_SELECTION(
+    uint8_t param_id,
+    uint8_t parent,
+    const char* name,
+    const char* options,
+    uint8_t val,
+    uint8_t min,
+    uint8_t max)
+{
+    deviceReadReplyPending = false;
+
+    // ----------------------------------------------------
+    // 1. Payload vorbereiten (beliebige Länge möglich)
+    // ----------------------------------------------------
+    uint8_t payload[256];
+    uint16_t p = 0;
+
+    payload[p++] = parent;
+    payload[p++] = CRSF_TEXT_SELECTION;
+
+    // Name
+    strcpy((char*)&payload[p], name);
+    p += strlen(name) + 1;
+
+    // Options
+    strcpy((char*)&payload[p], options);
+    p += strlen(options) + 1;
+
+    // Werte
+    payload[p++] = val;
+    payload[p++] = min;
+    payload[p++] = max;
+    payload[p++] = 0x00; // default
+    payload[p++] = 0x00; // units (null string)
+
+    // ----------------------------------------------------
+    // 2. Chunk-Berechnung
+    // ----------------------------------------------------
+    Serial.print("Anzahl zu übertragen : ");
+    Serial.print(p);
+    const uint8_t MAX_CHUNK = 55; // 64 - Header - CRC -1
+    uint8_t total_chunks = (p + MAX_CHUNK - 1) / MAX_CHUNK;
+
+    uint16_t offset = 0;
+
+    Serial.print(" Anzahl zu chunks : ");
+    Serial.print(total_chunks);
+
+    // ----------------------------------------------------
+    // 3. Chunks senden
+    // ----------------------------------------------------
+    for (uint8_t chunk = 0; chunk < total_chunks; chunk++)
+    {
+        uint8_t remaining = total_chunks - chunk - 1;
+        uint8_t size = ((uint16_t)(p - offset) > MAX_CHUNK)
+               ? MAX_CHUNK
+               : (p - offset);
+
+        Serial.print(" remaining  : ");
+        Serial.print(remaining );
+
+        uint8_t len = 7 + size; // Header + Payload
+        Serial.print(" len : ");
+        Serial.println(len);
+        uint8_t packet[64];
+
+        packet[0] = CRSF_SYNC_byte;
+        packet[1] = len;
+        packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;
+        packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER;
+        packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
+        packet[5] = param_id;
+        packet[6] = remaining;
+
+        memcpy(&packet[7], &payload[offset], size);
+
+        // CRC
+        packet[len + 1] = crc8(&packet[2], len - 1);
+
+        // Senden
+        send_packets(packet, len + 2, 0);
+
+        delay(100);
+
+        offset += size;
+    }
+}
+
 
 void CRSF::send_param_response_CRSF_STRING(uint8_t param_id, uint8_t parent, const char* name, const char* value, uint8_t val, uint8_t max_length) {
 
@@ -878,4 +1005,253 @@ void send_command(uint8_t command_id, std::initializer_list<uint8_t> payload) {
 #if DEBUG_CRSF_SEND
     Serial.println("📤 Command send");
 #endif     
+}
+
+//******************Telemetry
+
+void CRSF::send_tele_GPS(int32_t latitude, int32_t longitude, uint16_t groundspeed, uint16_t heading, uint16_t altitude, uint8_t satellites) {
+
+    uint8_t len = 17;
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;   // sync
+    packet[1] = len;    // len
+    packet[2] = CRSF_FRAMETYPE_GPS;   // type
+    packet[3] = ((latitude >> 24) & 0xFF);            // latitude     big endian
+    packet[4] = ((latitude >> 16) & 0xFF);            // latitude     big endian
+    packet[5] = ((latitude >> 8) & 0xFF);             // latitude     big endian 
+    packet[6] = (latitude & 0xFF);                    // latitude     big endian
+
+    packet[7] = ((longitude >> 24) & 0xFF);           // longitude     big endian
+    packet[8] = ((longitude >> 16) & 0xFF);           // longitude     big endian
+    packet[9] = ((longitude >> 8) & 0xFF);            // longitude     big endian 
+    packet[10] = (longitude & 0xFF);                  // longitude     big endian
+
+    packet[11] = ((groundspeed >> 8) & 0xFF);         // groundspeed   big endian 
+    packet[12] = (groundspeed & 0xFF);                // groundspeed   big endian
+
+    packet[13] = ((heading >> 8) & 0xFF);             // heading   big endian 
+    packet[14] = (heading & 0xFF);                    // heading   big endian
+
+    packet[15] = ((altitude + 1000 >> 8) & 0xFF);     // altitude + 1000 offset  big endian 
+    packet[16] = (altitude + 1000 & 0xFF);            // altitude + 1000 offset  big endian    
+
+    packet[17] = satellites;                          // satellites 0-100%
+
+    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2 , 0);
+    
+#if DEBUG_CRSF_TELE    
+    Serial.println("📤 Command send_tele_GPS");
+#endif    
+}
+
+void CRSF::send_tele_Battery_Sensor(uint16_t voltage, uint16_t current, uint32_t capacity_used, uint8_t remaining) {
+
+    uint8_t len = 10;
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;   // sync
+    packet[1] = len;    // len
+    packet[2] = CRSF_FRAMETYPE_BATTERY_SENSOR;   // type
+    packet[3] = ((voltage >> 8) & 0xFF);            // voltage 2   V * 10 big endian 
+    packet[4] = (voltage & 0xFF);                   // voltage 1   V * 10 big endian
+    packet[5] = ((current >> 8) & 0xFF);            // current 2   A * 10 big endian
+    packet[6] = (current & 0xFF);                   // current 1   A * 10 big endian
+    packet[7] = ((capacity_used >> 16) & 0xFF);     // capacity_used 3 mah big endian
+    packet[8] = ((capacity_used >> 8) & 0xFF);      // capacity_used 2 mah big endian    
+    packet[9] = (capacity_used & 0xFF);             // capacity_used 1 mah big endian
+    packet[10] = remaining;                         // remaining 0-100%
+
+    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2 , 0);
+    
+#if DEBUG_CRSF_TELE    
+    Serial.println("📤 Command send_tele_Battery_Sensor");
+#endif     
+}
+
+void CRSF::send_tele_Vario(uint16_t v_speed) {
+
+    uint8_t len = 4;
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;   // sync
+    packet[1] = len;    // len
+    packet[2] = CRSF_FRAMETYPE_VARIO;   // type
+    packet[3] = ((v_speed >> 8) & 0xFF);            // v_speed   V * 10 big endian 
+    packet[4] = (v_speed & 0xFF);                   // v_speed   V * 10 big endian
+
+    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2 , 0);
+
+#if DEBUG_CRSF_TELE
+    Serial.println("📤 Command send_tele_Vario");
+#endif     
+}
+
+void CRSF::send_tele_Baro_Altitude(int32_t altitude_dm, int16_t vertical_speed_cm_s) {
+
+    uint16_t altitude_packed = get_altitude_packed(altitude_dm);
+    uint8_t vertical_speed_packed = get_vertical_speed_packed(vertical_speed_cm_s);
+
+    uint8_t len = 5;
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;   // sync
+    packet[1] = len;    // len
+    packet[2] = CRSF_FRAMETYPE_BARO_ALTITUDE;   // type
+    packet[3] = ((altitude_packed >> 8) & 0xFF);            // altitude_packed   V * 10 big endian 
+    packet[4] = (altitude_packed & 0xFF);                   // altitude_packed   V * 10 big endian
+    packet[5] = vertical_speed_packed;                      // vertical_speed_packed in cm_s
+
+    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2 , 0);
+
+#if DEBUG_CRSF_TELE
+    Serial.println("📤 Command send_tele_Baro_Altitude");
+#endif     
+}
+
+void CRSF::send_tele_Airspeed(uint16_t speed) {
+
+    uint8_t len = 4;
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;   // sync
+    packet[1] = len;    // len
+    packet[2] = CRSF_FRAMETYPE_AIRSPEED;   // type
+    packet[3] = ((speed >> 8) & 0xFF);            // speed   V * 10 big endian 
+    packet[4] = (speed & 0xFF);                   // speed   V * 10 big endian
+
+    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2 , 0);
+
+#if DEBUG_CRSF_TELE    
+    Serial.println("📤 Command send_tele_Airspeed");
+#endif    
+}
+
+void CRSF::send_tele_RPM(uint8_t rpm_source_id, std::initializer_list<int32_t> rpm_values) {
+
+    uint8_t count = rpm_values.size();
+    if (count == 0 || count > 19) return;   // CRSF Limit
+
+    // Länge: 1 Byte source_id + 3 Bytes pro RPM-Wert
+    uint8_t len = 3 + (count * 3);
+
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;                 // Sync
+    packet[1] = len;                            // Length
+    packet[2] = CRSF_FRAMETYPE_RPM;             // Frame type
+    packet[3] = rpm_source_id;                  // Source ID
+
+    // RPM-Werte packen (24-bit signed, big endian)
+    uint8_t pos = 4;
+    for (int32_t rpm : rpm_values) {
+        packet[pos++] = (rpm >> 16) & 0xFF;
+        packet[pos++] = (rpm >> 8)  & 0xFF;
+        packet[pos++] = rpm & 0xFF;
+    }
+
+    // CRC
+    packet[packet[1] + 1] = crc8(&packet[2], packet[1] - 1);
+
+    // Senden
+    send_packets(packet, len + 2, 0);
+
+#if DEBUG_CRSF_TELE
+    Serial.println("📤 Telemetry RPM sent");
+#endif
+}
+
+void CRSF::send_tele_Temp(uint8_t temp_source_id, std::initializer_list<int32_t> temperature)
+{
+
+    uint8_t count = temperature.size();
+    if (count == 0 || count > 19) return;   // CRSF Limit
+
+    uint8_t len = 3 + (count * 2);          // source_id + 2 bytes per temp
+
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;             // Sync
+    packet[1] = len;                        // Length
+    packet[2] = CRSF_FRAMETYPE_TEMP;        // Frame type
+    packet[3] = temp_source_id;             // Source ID
+
+    uint8_t pos = 4;
+
+    // Temperaturwerte packen (16-bit signed, big endian)
+    for (int32_t t : temperature)
+    {
+        int16_t temp = (int16_t)t;
+        packet[pos++] = (temp >> 8) & 0xFF;
+        packet[pos++] = temp & 0xFF;
+    }
+
+    // CRC
+    packet[packet[1] + 1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2, 0);
+
+#if DEBUG_CRSF_TELE
+    Serial.println("📤 Telemetry TEMP sent");
+#endif
+}
+
+void CRSF::send_tele_Voltages(uint8_t Voltage_source_id, std::initializer_list<int32_t> voltage_values)
+{
+
+    uint8_t count = voltage_values.size();
+    if (count == 0 || count > 19) return;   // CRSF Limit
+
+    uint8_t len = 3 + (count * 2);          // origin + 2 bytes per voltage
+
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;             // Sync
+    packet[1] = len;                        // Length
+    packet[2] = CRSF_FRAMETYPE_VOLTAGES;     // Frame type
+    packet[3] = Voltage_source_id;             // Source / origin
+
+    uint8_t pos = 4;
+
+    // Spannungswerte packen (16-bit unsigned, big endian)
+    for (int32_t v : voltage_values)
+    {
+        uint16_t volt = (uint16_t)v;
+        packet[pos++] = (volt >> 8) & 0xFF;
+        packet[pos++] = volt & 0xFF;
+    }
+
+    // CRC
+    packet[packet[1] + 1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2, 0);
+
+#if DEBUG_CRSF_TELE
+    Serial.println("📤 Telemetry VOLTAGES sent");
+#endif
+}
+
+void CRSF::send_tele_Attitude(int16_t pitch, int16_t roll, int16_t yaw) {
+
+    uint8_t len = 8;
+    uint8_t packet[64];
+    packet[0] = CRSF_SYNC_byte;   // sync
+    packet[1] = len;    // len
+    packet[2] = CRSF_FRAMETYPE_ATTITUDE;   // type
+    packet[3] = ((pitch >> 8) & 0xFF);            // pitch   big endian 
+    packet[4] = (pitch & 0xFF);                   // pitch   big endian
+    packet[5] = ((roll >> 8) & 0xFF);             // roll   big endian 
+    packet[6] = (roll & 0xFF);                    // roll   big endian
+    packet[7] = ((yaw >> 8) & 0xFF);              // yaw   big endian 
+    packet[8] = (yaw & 0xFF);                     // yaw   big endian    
+
+    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+
+    send_packets(packet, len + 2 , 0);
+
+#if DEBUG_CRSF_TELE
+    Serial.println("📤 Command send_tele_Attitude");
+#endif  
 }

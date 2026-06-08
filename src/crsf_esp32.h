@@ -29,6 +29,16 @@ public:
     void send_param_response_CRSF_FOLDER(uint8_t param_id, uint8_t parent, const char* name, std::initializer_list<uint8_t> children);
     void send_param_response_CRSF_INFO(uint8_t param_id, uint8_t parent,  const char* name, const char* info);
 
+    void send_tele_GPS(int32_t latitude, int32_t longitude, uint16_t groundspeed, uint16_t heading, uint16_t altitude, uint8_t satellites);
+    void send_tele_Battery_Sensor(uint16_t voltage, uint16_t current, uint32_t capacity_used, uint8_t remaining);
+    void send_tele_Vario(uint16_t v_speed);   
+    void send_tele_Baro_Altitude(int32_t altitude_dm, int16_t vertical_speed_cm_s);
+    void send_tele_Airspeed(uint16_t speed);
+    void send_tele_RPM(uint8_t rpm_source_id, std::initializer_list<int32_t> rpm_value);
+    void send_tele_Temp(uint8_t temp_source_id, std::initializer_list<int32_t> temperature);
+    void send_tele_Voltages(uint8_t voltage_source_id, std::initializer_list<int32_t> voltage_values);
+    void send_tele_Attitude(int16_t pitch, int16_t roll, int16_t yaw);
+
     void send_command_MWSET(uint8_t adress, uint8_t state);
     void send_command_MWSET4(uint8_t adress, uint8_t stateH, uint8_t stateL);
     void send_command_MWSET4M(uint8_t adress_1, uint8_t stateH_1, uint8_t stateL_1, uint8_t adress_2, uint8_t stateH_2, uint8_t stateL_2);
