@@ -70,7 +70,7 @@ void loop() {
 
     // Parameter lesen
     if (crsf.getDeviceReadReplyPending()) {
-        handle_param_request(crsf.get_crfs_buffer(5));
+        handle_param_request(crsf.get_crfs_buffer(5), crsf.get_crfs_buffer(6));
     }
 
     // Parameter schreiben
@@ -100,26 +100,26 @@ void handle_param_write(uint8_t id, uint8_t value) {
 }
 
 // Verarbeitung von Leseanfragen auf Parameter
-void handle_param_request(uint8_t id) {
-    switch (id) {
-        case 0: crsf.send_param_response_CRSF_FOLDER(id, 0, "ROOT",{1,2,3,4,5,9}); break;   // Root-Ordner mit Parametern
-        case 1: crsf.send_param_response_CRSF_UINT8(id, 0, "Liter", Variable2, 0, 10, " ml"); break;
-        case 2: crsf.send_param_response_CRSF_FOLDER(id, 0, "Ordner (ID2)", {8,9,6}); break;
-        case 3: crsf.send_param_response_CRSF_FOLDER(id, 0, "Ordner (ID3)", {4}); break;
-        case 4: crsf.send_param_response_CRSF_TEXT_SELECTION(id, 3, "BT Teleme 3", "Off;On", 0, 0, 1); break;
-        case 5: crsf.send_param_response_CRSF_UINT8(id, 0, "Test Wert", Variable1, 0, 5, " kg123"); break;
-        case 6: crsf.send_param_response_CRSF_INFO(id, 2, "Hallo", "Welt"); break;
-        case 7: crsf.send_param_response_CRSF_UINT8(id, 0, "Test 2", Variable3, 0, 11, "kg"); break;
-        case 8: crsf.send_param_response_CRSF_UINT8(id, 2, "Test 3", Variable4, 0, 12, "kg"); break;
-        case 9: crsf.send_param_response_CRSF_UINT8(id, 2, "Test 4", Variable5, 0, 13, "kg"); break;
-        case 10: crsf.send_param_response_CRSF_UINT8(id, 0, "Test 5", Variable6, 0, 14, "kg"); break;
-        case 11: crsf.send_param_response_CRSF_TEXT_SELECTION(id, 0, "BT Teleme 6", "Off;On", 0, 0, 1); break;
-        default: Serial.printf("❔ Unknown param ID %d\n", id); break;
+void handle_param_request(uint8_t param_id , uint8_t param_chunk) {
+    switch (param_id) {
+        case 0: crsf.send_param_response_CRSF_FOLDER(param_id, param_chunk, 0, "ROOT",{1,2,3,4,5,9}); break;   // Root-Ordner mit Parametern
+        case 1: crsf.send_param_response_CRSF_UINT8(param_id, param_chunk, 0, "Liter", Variable2, 0, 10, " ml"); break;
+        case 2: crsf.send_param_response_CRSF_FOLDER(param_id, param_chunk, 0, "Ordner (ID2)", {8,9,6}); break;
+        case 3: crsf.send_param_response_CRSF_FOLDER(param_id, param_chunk, 0, "Ordner (ID3)", {4}); break;
+        case 4: crsf.send_param_response_CRSF_TEXT_SELECTION(param_id, param_chunk, 3, "BT Teleme 3", "Off;On", 0, 0, 1); break;
+        case 5: crsf.send_param_response_CRSF_UINT8(param_id, param_chunk, 0, "Test Wert", Variable1, 0, 5, " kg123"); break;
+        case 6: crsf.send_param_response_CRSF_INFO(param_id, param_chunk, 2, "Hallo", "Welt"); break;
+        case 7: crsf.send_param_response_CRSF_UINT8(param_id, param_chunk, 0, "Test 2", Variable3, 0, 11, "kg"); break;
+        case 8: crsf.send_param_response_CRSF_UINT8(param_id, param_chunk, 2, "Test 3", Variable4, 0, 12, "kg"); break;
+        case 9: crsf.send_param_response_CRSF_UINT8(param_id, param_chunk, 2, "Test 4", Variable5, 0, 13, "kg"); break;
+        case 10: crsf.send_param_response_CRSF_UINT8(param_id, param_chunk, 0, "Test 5", Variable6, 0, 14, "kg"); break;
+        case 11: crsf.send_param_response_CRSF_TEXT_SELECTION(param_id, param_chunk, 0, "BT Teleme 6", "Off;On", 0, 0, 1); break;
+        default: Serial.printf("❔ Unknown param ID %d\n", param_id); break;
     }
 
     // Weitere mögliche Antworten:
-    // crsf.send_param_response_CRSF_UINT8(id, "Test Wert", 5, 0, 5, "kg");
-    // crsf.send_param_response_CRSF_FLOAT(id, "Ziel", 1234, 0, 5000, 0, 2, 0.2, "°C");
-    // crsf.send_param_response_CRSF_INFO(id, "Hallo", "Welt");
-    // crsf.send_param_response_CRSF_FOLDER(id, "ordner", 0);
+    // crsf.send_param_response_CRSF_UINT8(param_id, param_chunk, "Test Wert", 5, 0, 5, "kg");
+    // crsf.send_param_response_CRSF_FLOAT(param_id, param_chunk, "Ziel", 1234, 0, 5000, 0, 2, 0.2, "°C");
+    // crsf.send_param_response_CRSF_INFO(param_id, param_chunk, "Hallo", "Welt");
+    // crsf.send_param_response_CRSF_FOLDER(param_id, param_chunk, "ordner", 0);
 }

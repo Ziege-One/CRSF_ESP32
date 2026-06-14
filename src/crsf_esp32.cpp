@@ -7,6 +7,7 @@ LinkStatistics linkStats;
 
 DeviceInfo info;
 
+// DEBUG Schalter
 #define DEBUG_CRSF false
 #define DEBUG_CRSF_TYPE false
 #define DEBUG_CRSF_SEND false
@@ -469,7 +470,7 @@ void CRSF::send_device_info(const char* name, uint8_t parameter) {
 #endif    
 }
 
-void CRSF::send_param_response_CRSF_UINT8(uint8_t param_id, uint8_t parent, const char* name, uint8_t val, uint8_t min, uint8_t max, const char* unit) { 
+void CRSF::send_param_response_CRSF_UINT8(uint8_t param_id, uint8_t param_chunk, uint8_t parent, const char* name, uint8_t val, uint8_t min, uint8_t max, const char* unit) { 
 
     deviceReadReplyPending = false;
 
@@ -511,116 +512,127 @@ void CRSF::send_param_response_CRSF_UINT8(uint8_t param_id, uint8_t parent, cons
 #endif    
 }
 
-void CRSF::send_param_response_CRSF_FLOAT(uint8_t param_id, uint8_t parent, const char* name, uint32_t val, uint32_t min, uint32_t max, uint32_t default_val, uint8_t decimal_point, uint32_t step_size, const char* unit) {
-
+void CRSF::send_param_response_CRSF_FLOAT(
+    uint8_t param_id,
+    uint8_t param_chunk,
+    uint8_t parent,
+    const char* name,
+    uint32_t val,
+    uint32_t min,
+    uint32_t max,
+    uint32_t default_val,
+    uint8_t decimal_point,
+    uint32_t step_size,
+    const char* unit)
+{
     deviceReadReplyPending = false;
 
-    uint8_t len_name = strlen(name) + 1; // len + null terminator
-    uint8_t len_unit = strlen(unit) + 1; // len + null terminator
+    // ----------------------------------------------------
+    // 1. Gesamten Payload in großen Buffer schreiben
+    // ----------------------------------------------------
+    uint8_t payload[256];
+    uint16_t p = 0;
 
-    uint8_t len = 29 + len_name + len_unit;
+    payload[p++] = parent;
+    payload[p++] = CRSF_FLOAT;
+
+    // Name
+    strcpy((char*)&payload[p], name);
+    p += strlen(name) + 1;
+
+    // Value
+    payload[p++] = (val >> 24) & 0xFF;
+    payload[p++] = (val >> 16) & 0xFF;
+    payload[p++] = (val >> 8)  & 0xFF;
+    payload[p++] = (val)       & 0xFF;
+
+    // Min
+    payload[p++] = (min >> 24) & 0xFF;
+    payload[p++] = (min >> 16) & 0xFF;
+    payload[p++] = (min >> 8)  & 0xFF;
+    payload[p++] = (min)       & 0xFF;
+
+    // Max
+    payload[p++] = (max >> 24) & 0xFF;
+    payload[p++] = (max >> 16) & 0xFF;
+    payload[p++] = (max >> 8)  & 0xFF;
+    payload[p++] = (max)       & 0xFF;
+
+    // Default
+    payload[p++] = (default_val >> 24) & 0xFF;
+    payload[p++] = (default_val >> 16) & 0xFF;
+    payload[p++] = (default_val >> 8)  & 0xFF;
+    payload[p++] = (default_val)       & 0xFF;
+
+    // Decimal point
+    payload[p++] = decimal_point;
+
+    // Step size
+    payload[p++] = (step_size >> 24) & 0xFF;
+    payload[p++] = (step_size >> 16) & 0xFF;
+    payload[p++] = (step_size >> 8)  & 0xFF;
+    payload[p++] = (step_size)       & 0xFF;
+
+    // Unit
+    strcpy((char*)&payload[p], unit);
+    p += strlen(unit) + 1;
+
+    // ----------------------------------------------------
+    // 2. Chunk-Berechnung
+    // ----------------------------------------------------
+    const uint8_t MAX_CHUNK = 56;
+    uint8_t total_chunks = (p + MAX_CHUNK - 1) / MAX_CHUNK;
+
+    uint8_t remaining = total_chunks - param_chunk - 1;
+
+    uint8_t size = ((uint16_t)(p - (param_chunk * MAX_CHUNK)) > MAX_CHUNK)
+        ? MAX_CHUNK
+        : (p - (param_chunk * MAX_CHUNK));
+
+    uint8_t len = 6 + size;
+
     uint8_t packet[64];
-    packet[0] = CRSF_SYNC_byte;   // sync
-    packet[1] = len;    // len
-    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;   // type
-    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER; 
+
+    // ----------------------------------------------------
+    // 3. CRSF Header
+    // ----------------------------------------------------
+    packet[0] = CRSF_SYNC_byte;
+    packet[1] = len;
+    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;
+    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER;
     packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
-    packet[5] = param_id; //config field index, parameter field 03
-    packet[6] = 0x00; // chunks remaining, 0 chunks remaining after this one
-    
-    packet[7] = parent; // Parent folder
-    packet[8] = CRSF_FLOAT; // Data type
+    packet[5] = param_id;
+    packet[6] = remaining;
 
-    strcpy((char*)&packet[9], name); // Name
+    // Payload dieses Chunks kopieren
+    memcpy(&packet[7], &payload[param_chunk * MAX_CHUNK], size);
 
-    packet[9  + len_name] = ((val >> 24) & 0xFF);   // Value 4
-	packet[10 + len_name] = ((val >> 16) & 0xFF);   // Value 3
-	packet[11 + len_name] = ((val >> 8) & 0xFF);    // Value 2
-    packet[12 + len_name] = (val & 0xFF);           // Value 1
+    // CRC
+    packet[packet[1] + 1] = crc8(&packet[2], packet[1] - 1);
 
-    packet[13 + len_name] = ((min >> 24) & 0xFF);   // min Value 4
-    packet[14 + len_name] = ((min >> 16) & 0xFF);   // min Value 3
-    packet[15 + len_name] = ((min >> 8) & 0xFF);    // min Value 2	
-    packet[16 + len_name] = (min & 0xFF);           // min Value 1
-
-    packet[17 + len_name] = ((max >> 24) & 0xFF);   // max Value 4
-    packet[18 + len_name] = ((max >> 16) & 0xFF);   // max Value 3
-    packet[19 + len_name] = ((max >> 8) & 0xFF);    // max Value 2	
-    packet[20 + len_name] = (max & 0xFF);           // max Value 1
-
-    packet[21 + len_name] = ((default_val >> 24) & 0xFF);   // default Value 4
-    packet[22 + len_name] = ((default_val >> 16) & 0xFF);   // default Value 3
-    packet[23 + len_name] = ((default_val >> 8) & 0xFF);    // default Value 2 	
-    packet[24 + len_name] = (default_val & 0xFF);           // default Value 1  
-
-    packet[25 + len_name] = decimal_point;   // Decimal_point
-
-    packet[26 + len_name] = ((step_size >> 24) & 0xFF);   // Step Size Value 4 
-	packet[27 + len_name] = ((step_size >> 16) & 0xFF);   // Step Size Value 3
-	packet[28 + len_name] = ((step_size >> 8) & 0xFF);    // Step Size Value 2
-    packet[29 + len_name] = (step_size & 0xFF);           // Step Size Value 1
-
-    strcpy((char*)&packet[30 + len_name], unit); // Name
-    
-    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
-
+    // Senden
     send_packets(packet, len + 2, 0);
 
 #if DEBUG_CRSF_SEND
-    Serial.print("📤 Device Parameter FLOAT sent ID: "); 
+    Serial.print("📤 Device Parameter FLOAT sent ID: ");
     Serial.print(param_id);
     Serial.print(" parent: ");
     Serial.print(parent);
+    Serial.print(" bytes: ");
+    Serial.print(p);
+    Serial.print(" total chunks: ");
+    Serial.print(total_chunks);
+    Serial.print(" remaining: ");
+    Serial.print(remaining);
     Serial.print(" Val: ");
-    Serial.println(val);
-#endif    
+    Serial.println(val);    
+#endif
 }
-/*
-void CRSF::send_param_response_CRSF_TEXT_SELECTION(uint8_t param_id, uint8_t parent, const char* name, const char* options, uint8_t val, uint8_t min, uint8_t max) {
 
-    deviceReadReplyPending = false;
 
-    uint8_t len_name = strlen(name) + 1; // len + null terminator
-    uint8_t len_options = strlen(options) + 1; // len + null terminator
-
-    uint8_t len = 13 + len_name + len_options;
-    uint8_t packet[64];
-    packet[0] = CRSF_SYNC_byte;   // sync
-    packet[1] = len;    // len
-    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;   // type
-    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER; 
-    packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
-    packet[5] = param_id; //crfs_buffer[5]; //config field index, parameter field 03
-    packet[6] = 0x00; // chunks remaining, 0 chunks remaining after this one
-    
-    packet[7] = parent; // Parent folder
-    packet[8] = CRSF_TEXT_SELECTION; // Data type
-
-    strcpy((char*)&packet[9], name); // Name
-    strcpy((char*)&packet[9 + len_name],options); //Option
-
-    packet[9 + len_name + len_options] = val; // Value
-    packet[10 + len_name + len_options] = min; // min
-    packet[11 + len_name + len_options] = max; // max
-    packet[12 + len_name + len_options] = 0x00; // default
-    packet[13 + len_name + len_options] = 0x00; // units (null-terminated string)
-    
-    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
-
-    send_packets(packet, len + 2, 0);
-
-#if DEBUG_CRSF_SEND
-    Serial.print("📤 Device Parameter TEXT_SELECTION sent ID: ");
-    Serial.print(param_id);
-    Serial.print(" parent: ");
-    Serial.print(parent);
-    Serial.print(" Val: ");
-    Serial.println(val);
-#endif    
-}
-*/
 void CRSF::send_param_response_CRSF_TEXT_SELECTION(
     uint8_t param_id,
+    uint8_t param_chunk,
     uint8_t parent,
     const char* name,
     const char* options,
@@ -657,58 +669,57 @@ void CRSF::send_param_response_CRSF_TEXT_SELECTION(
     // ----------------------------------------------------
     // 2. Chunk-Berechnung
     // ----------------------------------------------------
-    Serial.print("Anzahl zu übertragen : ");
-    Serial.print(p);
-    const uint8_t MAX_CHUNK = 55; // 64 - Header - CRC -1
+    const uint8_t MAX_CHUNK = 56; // 64 - Header - CRC - 1
     uint8_t total_chunks = (p + MAX_CHUNK - 1) / MAX_CHUNK;
-
-    uint16_t offset = 0;
-
-    Serial.print(" Anzahl zu chunks : ");
-    Serial.print(total_chunks);
 
     // ----------------------------------------------------
     // 3. Chunks senden
     // ----------------------------------------------------
-    for (uint8_t chunk = 0; chunk < total_chunks; chunk++)
-    {
-        uint8_t remaining = total_chunks - chunk - 1;
-        uint8_t size = ((uint16_t)(p - offset) > MAX_CHUNK)
-               ? MAX_CHUNK
-               : (p - offset);
+    //for (uint8_t chunk = 0; chunk < total_chunks; chunk++)
 
-        Serial.print(" remaining  : ");
-        Serial.print(remaining );
+    uint8_t remaining = total_chunks - param_chunk - 1;
 
-        uint8_t len = 7 + size; // Header + Payload
-        Serial.print(" len : ");
-        Serial.println(len);
-        uint8_t packet[64];
+    uint8_t size = ((uint16_t)(p - (param_chunk * MAX_CHUNK)) > MAX_CHUNK)
+        ? MAX_CHUNK
+        : (p - (param_chunk * MAX_CHUNK));
 
-        packet[0] = CRSF_SYNC_byte;
-        packet[1] = len;
-        packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;
-        packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER;
-        packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
-        packet[5] = param_id;
-        packet[6] = remaining;
+    uint8_t len = 6 + size; // Header + Payload;        
+    uint8_t packet[64];
 
-        memcpy(&packet[7], &payload[offset], size);
+    packet[0] = CRSF_SYNC_byte;
+    packet[1] = len;
+    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;
+    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER;
+    packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
+    packet[5] = param_id;
+    packet[6] = remaining;
 
-        // CRC
-        packet[len + 1] = crc8(&packet[2], len - 1);
+    memcpy(&packet[7], &payload[(param_chunk * MAX_CHUNK)], size);
 
-        // Senden
-        send_packets(packet, len + 2, 0);
+    // CRC
+    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
 
-        delay(100);
+    // Senden
+    send_packets(packet, len + 2, 0);
 
-        offset += size;
-    }
+#if DEBUG_CRSF_SEND
+    Serial.print("📤 Device Parameter TEXT SELECTION sent ID: ");
+    Serial.print(param_id);
+    Serial.print(" parent: ");
+    Serial.print(parent);
+    Serial.print(" bytes : ");
+    Serial.print(p);
+    Serial.print(" Total chunks : ");
+    Serial.print(total_chunks);
+    Serial.print(" remaining  : ");
+    Serial.print(remaining );    
+    Serial.print(" len : ");
+    Serial.println(len);
+#endif   
 }
 
 
-void CRSF::send_param_response_CRSF_STRING(uint8_t param_id, uint8_t parent, const char* name, const char* value, uint8_t val, uint8_t max_length) {
+void CRSF::send_param_response_CRSF_STRING(uint8_t param_id, uint8_t param_chunk, uint8_t parent, const char* name, const char* value, uint8_t val, uint8_t max_length) {
 
     deviceReadReplyPending = false;
 
@@ -742,81 +753,162 @@ void CRSF::send_param_response_CRSF_STRING(uint8_t param_id, uint8_t parent, con
 #endif    
 }
 
-void CRSF::send_param_response_CRSF_FOLDER(uint8_t param_id, uint8_t parent, const char* name, std::initializer_list<uint8_t> children) {
-
+void CRSF::send_param_response_CRSF_FOLDER(
+    uint8_t param_id,
+    uint8_t param_chunk,
+    uint8_t parent,
+    const char* name,
+    std::initializer_list<uint8_t> children)
+{
     deviceReadReplyPending = false;
 
-    uint8_t len_name = strlen(name) + 1; // len + null terminator
-    uint8_t len_children = children.size();
+    // ----------------------------------------------------
+    // 1. Gesamten Payload in großen Buffer aufbauen
+    // ----------------------------------------------------
+    uint8_t payload[256];
+    uint16_t p = 0;
 
-    uint8_t len = 9 + len_name + len_children;    
-    uint8_t packet[64];
-    packet[0] = CRSF_SYNC_byte;   // sync
-    packet[1] = len;    // len
-    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;   // type
-    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER; 
-    packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
-    packet[5] = param_id; //config field index, parameter field 03
-    packet[6] = 0x00; // chunks remaining, 0 chunks remaining after this one
-    
-    packet[7] = parent; // Parent folder
-    packet[8] = CRSF_FOLDER; // Data type
+    payload[p++] = parent;
+    payload[p++] = CRSF_FOLDER;
 
-    strcpy((char*)&packet[9], name); // Name
+    // Name
+    strcpy((char*)&payload[p], name);
+    p += strlen(name) + 1;
 
-    // List_of_children
-    int packet_count = 9;
+    // Children-Liste
     for (uint8_t c : children) {
-        packet[packet_count + len_name] = c; 
-        packet_count ++;
+        payload[p++] = c;
     }
-    
-    //packet[packet_count + len_name] = 0xFF;        // children Liste mit 0xFF abschließen
-    packet[9 + len_name + len_children] = 0xFF;        // children Liste mit 0xFF abschließen ????
 
-    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+    // Abschlussmarker laut CRSF-Spezifikation
+    payload[p++] = 0xFF;
 
+    // ----------------------------------------------------
+    // 2. Chunk-Berechnung
+    // ----------------------------------------------------
+    const uint8_t MAX_CHUNK = 56; // 64 - Header - CRC - 1
+    uint8_t total_chunks = (p + MAX_CHUNK - 1) / MAX_CHUNK;
+
+    uint8_t remaining = total_chunks - param_chunk - 1;
+
+    uint8_t size = ((uint16_t)(p - (param_chunk * MAX_CHUNK)) > MAX_CHUNK)
+        ? MAX_CHUNK
+        : (p - (param_chunk * MAX_CHUNK));
+
+    uint8_t len = 6 + size;
+
+    uint8_t packet[64];
+
+    // ----------------------------------------------------
+    // 3. CRSF Header
+    // ----------------------------------------------------
+    packet[0] = CRSF_SYNC_byte;
+    packet[1] = len;
+    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;
+    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER;
+    packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
+    packet[5] = param_id;
+    packet[6] = remaining;
+
+    // Payload dieses Chunks kopieren
+    memcpy(&packet[7], &payload[param_chunk * MAX_CHUNK], size);
+
+    // CRC berechnen
+    packet[packet[1] + 1] = crc8(&packet[2], packet[1] - 1);
+
+    // Senden
     send_packets(packet, len + 2, 0);
 
 #if DEBUG_CRSF_SEND
-    Serial.println("📤 Device Parameter FOLDER sent");
-#endif    
+    Serial.print("📤 Device Parameter FOLDER sent ID: ");
+    Serial.print(param_id);
+    Serial.print(" parent: ");
+    Serial.print(parent);
+    Serial.print(" bytes: ");
+    Serial.print(p);
+    Serial.print(" total chunks: ");
+    Serial.print(total_chunks);
+    Serial.print(" remaining: ");
+    Serial.println(remaining);
+#endif
 }
 
-void CRSF::send_param_response_CRSF_INFO(uint8_t param_id, uint8_t parent, const char* name, const char* info) {
-
+void CRSF::send_param_response_CRSF_INFO(
+    uint8_t param_id,
+    uint8_t param_chunk,
+    uint8_t parent,
+    const char* name,
+    const char* info)
+{
     deviceReadReplyPending = false;
 
-    uint8_t len_name = strlen(name) + 1; // len + null terminator
-    uint8_t len_info = strlen(info) + 1; // len + null terminator
+    // ----------------------------------------------------
+    // 1. Gesamten Payload in großen Buffer aufbauen
+    // ----------------------------------------------------
+    uint8_t payload[256];
+    uint16_t p = 0;
 
-    uint8_t len = 8 + len_name + len_info;
+    payload[p++] = parent;
+    payload[p++] = CRSF_INFO;
+
+    // Name
+    strcpy((char*)&payload[p], name);
+    p += strlen(name) + 1;
+
+    // Info-Text
+    strcpy((char*)&payload[p], info);
+    p += strlen(info) + 1;
+
+    // ----------------------------------------------------
+    // 2. Chunk-Berechnung
+    // ----------------------------------------------------
+    const uint8_t MAX_CHUNK = 56; // 64 - Header - CRC - 1
+    uint8_t total_chunks = (p + MAX_CHUNK - 1) / MAX_CHUNK;
+
+    uint8_t remaining = total_chunks - param_chunk - 1;
+
+    uint8_t size = ((uint16_t)(p - (param_chunk * MAX_CHUNK)) > MAX_CHUNK)
+        ? MAX_CHUNK
+        : (p - (param_chunk * MAX_CHUNK));
+
+    uint8_t len = 6 + size;
+
     uint8_t packet[64];
-    packet[0] = CRSF_SYNC_byte;   // sync
-    packet[1] = len;    // len
-    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;   // type
-    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER; 
+
+    // ----------------------------------------------------
+    // 3. CRSF Header
+    // ----------------------------------------------------
+    packet[0] = CRSF_SYNC_byte;
+    packet[1] = len;
+    packet[2] = CRSF_FRAMETYPE_PARAMETER_SETTINGS_ENTRY;
+    packet[3] = CRSF_ADDRESS_RADIO_TRANSMITTER;
     packet[4] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
-    packet[5] = param_id; //config field index, parameter field 03
-    packet[6] = 0x00; // chunks remaining, 0 chunks remaining after this one
-    
-    packet[7] = parent; // Parent folder
-    packet[8] = CRSF_INFO; // Data type
+    packet[5] = param_id;
+    packet[6] = remaining;
 
-    strcpy((char*)&packet[9], name); // Name
-    strcpy((char*)&packet[9 + len_name], info); // Info
-    
-    packet[packet[1]+1] = crc8(&packet[2], packet[1] - 1);
+    // Payload dieses Chunks kopieren
+    memcpy(&packet[7], &payload[param_chunk * MAX_CHUNK], size);
 
-    send_packets(packet, len + 2 , 0);
+    // CRC berechnen
+    packet[packet[1] + 1] = crc8(&packet[2], packet[1] - 1);
+
+    // Senden
+    send_packets(packet, len + 2, 0);
 
 #if DEBUG_CRSF_SEND
     Serial.print("📤 Device Parameter INFO sent ID: ");
     Serial.print(param_id);
     Serial.print(" parent: ");
-    Serial.println(parent);
-#endif    
+    Serial.print(parent);
+    Serial.print(" bytes: ");
+    Serial.print(p);
+    Serial.print(" total chunks: ");
+    Serial.print(total_chunks);
+    Serial.print(" remaining: ");
+    Serial.println(remaining);
+#endif
 }
+
 
 void CRSF::send_command_MWSET(uint8_t adress, uint8_t state) {
 

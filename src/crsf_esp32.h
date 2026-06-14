@@ -22,12 +22,12 @@ public:
     void send_rc_channels_packed();
     void send_ping();
     void send_device_info(const char* name, uint8_t parameter);
-    void send_param_response_CRSF_UINT8(uint8_t param_id, uint8_t parent, const char* name, uint8_t val, uint8_t min, uint8_t max, const char* unit);
-    void send_param_response_CRSF_FLOAT(uint8_t param_id, uint8_t parent,  const char* name, uint32_t val, uint32_t min, uint32_t max, uint32_t default_val, uint8_t decimal_point, uint32_t step_size, const char* unit);
-    void send_param_response_CRSF_TEXT_SELECTION(uint8_t param_id, uint8_t parent,  const char* name, const char* options, uint8_t val, uint8_t min, uint8_t max);
-    void send_param_response_CRSF_STRING(uint8_t param_id, uint8_t parent,  const char* name, const char* value, uint8_t val, uint8_t max_length);
-    void send_param_response_CRSF_FOLDER(uint8_t param_id, uint8_t parent, const char* name, std::initializer_list<uint8_t> children);
-    void send_param_response_CRSF_INFO(uint8_t param_id, uint8_t parent,  const char* name, const char* info);
+    void send_param_response_CRSF_UINT8(uint8_t param_id, uint8_t param_chunk, uint8_t parent, const char* name, uint8_t val, uint8_t min, uint8_t max, const char* unit);
+    void send_param_response_CRSF_FLOAT(uint8_t param_id, uint8_t param_chunk, uint8_t parent,  const char* name, uint32_t val, uint32_t min, uint32_t max, uint32_t default_val, uint8_t decimal_point, uint32_t step_size, const char* unit);
+    void send_param_response_CRSF_TEXT_SELECTION(uint8_t param_id, uint8_t param_chunk, uint8_t parent,  const char* name, const char* options, uint8_t val, uint8_t min, uint8_t max);
+    void send_param_response_CRSF_STRING(uint8_t param_id, uint8_t param_chunk, uint8_t parent,  const char* name, const char* value, uint8_t val, uint8_t max_length);
+    void send_param_response_CRSF_FOLDER(uint8_t param_id, uint8_t param_chunk, uint8_t parent, const char* name, std::initializer_list<uint8_t> children);
+    void send_param_response_CRSF_INFO(uint8_t param_id, uint8_t param_chunk, uint8_t parent,  const char* name, const char* info);
 
     void send_tele_GPS(int32_t latitude, int32_t longitude, uint16_t groundspeed, uint16_t heading, uint16_t altitude, uint8_t satellites);
     void send_tele_Battery_Sensor(uint16_t voltage, uint16_t current, uint32_t capacity_used, uint8_t remaining);
