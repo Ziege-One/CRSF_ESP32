@@ -1,4 +1,3 @@
-#include "HEXBuilder.h"
 #include "crsf_esp32.h"
 
 HardwareSerial* serial_data;
