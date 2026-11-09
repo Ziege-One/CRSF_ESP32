@@ -17,6 +17,8 @@ public:
     CRSF();
     void init_crsf(HardwareSerial *serialPort, uint8_t rxPin, uint8_t txPin);
     void read_packets(uint8_t debug);
+    bool consumePacketReceived() { bool received = packetReceived; packetReceived = false; return received;}
+    
     void send_packets(byte* buffer, size_t length, uint8_t debug);
 
     void send_rc_channels_packed();
@@ -78,6 +80,7 @@ private:
     bool deviceReadReplyPending;
     bool deviceWriteReplyPending;
     bool deviceCommandReplyPending;
+    bool packetReceived = false;
 
     uint8_t crfs_buffer[CRSF_PACKET_SIZE];
     uint16_t channels[CRSF_MAX_CHANNELS];

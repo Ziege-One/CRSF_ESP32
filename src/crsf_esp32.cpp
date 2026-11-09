@@ -1,4 +1,3 @@
-#include "HEXBuilder.h"
 #include "crsf_esp32.h"
 
 HardwareSerial* serial_data;
@@ -346,6 +345,7 @@ void CRSF::read_packets(uint8_t debug) {
             crfs_buffer[byte_index++] = data;
             if (data == crc8(&crfs_buffer[2], length - 1)) {
                 crfs_buffer[byte_index++] = data;
+                packetReceived = true;
                 crsfDataReceive();
                 if (debug) {
                     Serial.print("RX-Buffer: ");
